@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx wrangler types
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - name: Build (production config)
+        run: npm run build
+      - name: Prepare E2E env (dev login + mocked AI)
+        run: cp .dev.vars.example .dev.vars
+      - run: npx playwright install --with-deps chromium
+      - name: E2E (Playwright, mobile viewport)
+        run: npm run test:e2e
+        env:
+          CI: "1"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7

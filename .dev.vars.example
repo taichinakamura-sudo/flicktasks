@@ -1,0 +1,7 @@
+# cp .dev.vars.example .dev.vars  (gitignore 済み)
+SESSION_SECRET=change-me-to-a-long-random-string
+GOOGLE_CLIENT_SECRET=
+# 開発/E2E 専用: Google なしでログインできる /auth/dev-login を有効化(本番では絶対に 1 にしない)
+DEV_LOGIN=1
+# 開発/E2E 専用: Workers AI を呼ばず決定的なモック結果を返す
+MOCK_AI=1
