@@ -131,6 +131,108 @@ test("シートで見積もりを設定・解除できる", async ({ page }) => 
   await expect(card()).toContainText("45分");
 });
 
+test("今から: 固定カードが現れ自動計測が進み、常に1件に保たれる", async ({ page }) => {
+  await openApp(page);
+  await addMemo(page, "タスクA");
+  await addMemo(page, "タスクB");
+  const cardA = () => page.getByTestId("task-card").filter({ hasText: "タスクA" });
+  const cardB = () => page.getByTestId("task-card").filter({ hasText: "タスクB" });
+
+  // A: メモ→今日→今から
+  await flick(cardA(), 1);
+  await page.getByTestId("tab-today").click();
+  await flick(cardA(), 1);
+  const nowCard = page.getByTestId("now-card");
+  await expect(nowCard).toBeVisible();
+  await expect(nowCard).toContainText("タスクA");
+
+  // 経過時間が進む
+  const t1 = await page.getByTestId("now-elapsed").textContent();
+  await page.waitForTimeout(1600);
+  const t2 = await page.getByTestId("now-elapsed").textContent();
+  expect(t2).not.toBe(t1);
+
+  // Bを今日→今からへ: Aは今日に戻り、固定カードはBになる(常に1件)
+  await page.getByTestId("tab-inbox").click();
+  await flick(cardB(), 1);
+  await page.getByTestId("tab-today").click();
+  await flick(cardB(), 1);
+  await expect(nowCard).toContainText("タスクB");
+  await expect(cardA()).toBeVisible();
+  await expect(cardA()).toHaveAttribute("data-status", "today");
+
+  // 固定カードを右フリックで完了 → カードが消え、実績が残る
+  await flick(nowCard, 1);
+  await expect(nowCard).toBeHidden();
+  await page.getByTestId("tab-done").click();
+  await expect(cardB()).toHaveAttribute("data-status", "done");
+
+  // 完了カードで右フリックしても何も起きない(跳ね返る)
+  await flick(cardB(), 1);
+  await expect(cardB()).toBeVisible();
+  await expect(cardB()).toHaveAttribute("data-status", "done");
+
+  // リロードしても実績(actualMs)が残っている
+  await page.reload();
+  await expect(page.getByTestId("skeleton")).toBeHidden({ timeout: 10_000 });
+  const stored = await page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem("flicktasks:v1") ?? "{}") as {
+        tasks: { text: string; status: string; actualMs: number }[];
+      },
+  );
+  const b = stored.tasks.find((t) => t.text === "タスクB");
+  expect(b?.status).toBe("done");
+  expect(b?.actualMs ?? 0).toBeGreaterThan(0);
+});
+
+test("今からのままリロードしても計測が継続する", async ({ page }) => {
+  await openApp(page);
+  await addMemo(page, "継続タスク");
+  const card = () => page.getByTestId("task-card").filter({ hasText: "継続タスク" });
+  await flick(card(), 1);
+  await page.getByTestId("tab-today").click();
+  await flick(card(), 1);
+  await expect(page.getByTestId("now-card")).toBeVisible();
+
+  await page.waitForTimeout(1200);
+  await page.reload();
+  await expect(page.getByTestId("skeleton")).toBeHidden({ timeout: 10_000 });
+  await expect(page.getByTestId("now-card")).toBeVisible();
+  const stored = await page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem("flicktasks:v1") ?? "{}") as {
+        tasks: { text: string; doingSince: number | null }[];
+      },
+  );
+  expect(stored.tasks.find((t) => t.text === "継続タスク")?.doingSince).not.toBeNull();
+  // 計測が0からやり直しになっていない
+  await expect(page.getByTestId("now-elapsed")).not.toHaveText(/^0:00/);
+});
+
+test("今日タブに予実サマリーが出る(計画と実績)", async ({ page }) => {
+  await openApp(page);
+  await addMemo(page, "見積もりあり");
+  await page.getByTestId("task-card").filter({ hasText: "見積もりあり" }).click();
+  await expect(page.getByTestId("sheet")).toBeVisible();
+  await page.getByTestId("estimate-30").click();
+  await expect(page.getByTestId("estimate-30")).toHaveAttribute("aria-pressed", "true");
+  await page.getByTestId("sheet-close").click();
+  await expect(page.getByTestId("sheet")).toBeHidden();
+  await flick(page.getByTestId("task-card").filter({ hasText: "見積もりあり" }), 1);
+
+  await addMemo(page, "見積もりなし");
+  await flick(page.getByTestId("task-card").filter({ hasText: "見積もりなし" }), 1);
+
+  // メモタブでは出ない
+  await expect(page.getByTestId("plan-summary")).toHaveCount(0);
+  await page.getByTestId("tab-today").click();
+  const summary = page.getByTestId("plan-summary");
+  await expect(summary).toBeVisible();
+  await expect(summary).toContainText("計画 30分");
+  await expect(summary).toContainText("実績 0分");
+});
+
 test("タップで詳細シート: 編集・優先度・削除と元に戻す", async ({ page }) => {
   await openApp(page);
   await addMemo(page, "編集するタスク");

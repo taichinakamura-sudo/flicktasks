@@ -3,6 +3,8 @@ import { useEffect } from "react";
 import { Background } from "./components/Background";
 import { Composer } from "./components/Composer";
 import { Header } from "./components/Header";
+import { NowCard } from "./components/NowCard";
+import { PlanSummary } from "./components/PlanSummary";
 import { Skeleton } from "./components/Skeleton";
 import { StatusTabs } from "./components/StatusTabs";
 import { TaskList } from "./components/TaskList";
@@ -34,6 +36,8 @@ export function App() {
         <Header />
         <Composer />
         <StatusTabs />
+        <NowCard />
+        <PlanSummary />
         <TaskList />
       </main>
       <TaskSheet />
