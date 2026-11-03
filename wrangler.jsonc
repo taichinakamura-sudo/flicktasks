@@ -21,7 +21,7 @@
   "ai": { "binding": "AI" },
   "vars": {
     "APP_ORIGIN": "https://flicktasks.taichi-nakamura.workers.dev",
-    "GOOGLE_CLIENT_ID": ""
+    "GOOGLE_CLIENT_ID": "361058386918-dropp0i2pc2hrcpps3i20ms1nq77b0pe.apps.googleusercontent.com"
   },
   // E2E / ローカル専用環境: Workers AI バインディングを外す(ローカル実行では AI は必ずリモート接続 = 認証が必要なため)。
   // MOCK_AI=1 と組み合わせて使う: `CLOUDFLARE_ENV=test vite build && vite preview`
