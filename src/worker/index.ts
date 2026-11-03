@@ -55,6 +55,10 @@ function toTask(input: z.infer<typeof taskInput>): Task {
     status: input.status,
     priority: input.priority,
     steps: input.steps,
+    estimateMin: null, // Task 2 で入力から受けるよう拡張する
+    actualMs: 0,
+    doingSince: null,
+    completedAt: null,
     createdAt: input.createdAt ?? now,
     updatedAt: now,
   };

@@ -8,7 +8,7 @@ export function StatusTabs() {
   const setFilter = useStore((s) => s.setFilter);
   const tasks = useStore((s) => s.tasks);
   const counts = useMemo(() => {
-    const c = { inbox: 0, doing: 0, done: 0 };
+    const c = { inbox: 0, today: 0, doing: 0, done: 0 };
     for (const t of tasks) c[t.status]++;
     return c;
   }, [tasks]);

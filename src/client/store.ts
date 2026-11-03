@@ -124,6 +124,10 @@ export const useStore = create<State>()((set, get) => {
         status: "inbox",
         priority: null,
         steps: [],
+        estimateMin: null,
+        actualMs: 0,
+        doingSince: null,
+        completedAt: null,
         createdAt: now,
         updatedAt: now,
       };

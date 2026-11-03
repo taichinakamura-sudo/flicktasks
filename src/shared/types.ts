@@ -1,4 +1,4 @@
-export const STATUSES = ["inbox", "doing", "done"] as const;
+export const STATUSES = ["inbox", "today", "doing", "done"] as const;
 export type Status = (typeof STATUSES)[number];
 
 export const PRIORITIES = ["low", "mid", "high"] as const;
@@ -12,9 +12,15 @@ export type Task = {
   status: Status;
   priority: Priority | null;
   steps: Step[];
+  estimateMin: number | null; // 見積もり分。null = 未設定
+  actualMs: number; // 実測の累計ミリ秒(doing滞在時間の自動計測)
+  doingSince: number | null; // doingに入った時刻。doing以外ではnull
+  completedAt: number | null; // doneに入った時刻。done以外ではnull
   createdAt: number;
   updatedAt: number;
 };
+
+export const ESTIMATE_CHIPS = [15, 30, 60, 90] as const;
 
 export type User = {
   id: string;
@@ -31,7 +37,8 @@ export type Refinement = {
 
 export const STATUS_LABEL: Record<Status, string> = {
   inbox: "メモ",
-  doing: "進行中",
+  today: "今日",
+  doing: "今から",
   done: "完了",
 };
 

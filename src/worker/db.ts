@@ -26,6 +26,10 @@ export function rowToTask(r: TaskRow): Task {
     status: r.status,
     priority: r.priority,
     steps,
+    estimateMin: null, // Task 2 で実カラムにマップする
+    actualMs: 0,
+    doingSince: null,
+    completedAt: null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
