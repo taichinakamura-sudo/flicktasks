@@ -14,7 +14,7 @@
       "binding": "DB",
       "database_name": "flicktasks",
       // `wrangler d1 create flicktasks` の出力で置き換える(ローカル開発はこのままで動く)
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "f3ebf0e6-5563-499d-9a8b-1fe215510e19",
       "migrations_dir": "migrations"
     }
   ],
@@ -32,7 +32,7 @@
         {
           "binding": "DB",
           "database_name": "flicktasks",
-          "database_id": "00000000-0000-0000-0000-000000000000",
+          "database_id": "f3ebf0e6-5563-499d-9a8b-1fe215510e19",
           "migrations_dir": "migrations"
         }
       ],
