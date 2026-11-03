@@ -47,7 +47,10 @@ export function hydrateTask(raw: unknown): Task | null {
   const steps: Step[] = Array.isArray(r.steps)
     ? r.steps.filter(
         (s): s is Step =>
-          typeof s === "object" && s !== null && typeof (s as Step).text === "string" && typeof (s as Step).done === "boolean",
+          typeof s === "object" &&
+          s !== null &&
+          typeof (s as Step).text === "string" &&
+          typeof (s as Step).done === "boolean",
       )
     : [];
   return {
@@ -82,7 +85,10 @@ export function sameLocalDay(a: number, b: number): boolean {
 }
 
 /** 今日の予実。対象 = today/doing全件 + 今日完了したdone */
-export function planActual(tasks: Task[], now: number): { planMin: number; actualMs: number; empty: boolean } {
+export function planActual(
+  tasks: Task[],
+  now: number,
+): { planMin: number; actualMs: number; empty: boolean } {
   const target = tasks.filter(
     (t) =>
       t.status === "today" ||

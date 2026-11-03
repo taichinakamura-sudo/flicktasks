@@ -35,8 +35,8 @@ export const STATUS_LABEL = { inbox: "メモ", today: "今日", doing: "今か�
 type Task = {
   // 既存フィールドはそのまま。以下を追加:
   estimateMin: number | null; // 見積もり分。null = 未設定
-  actualMs: number;           // 実測の累計ミリ秒。doing を離れるたびに加算
-  doingSince: number | null;  // doing に入った時刻(epoch ms)。doing 以外では null
+  actualMs: number; // 実測の累計ミリ秒。doing を離れるたびに加算
+  doingSince: number | null; // doing に入った時刻(epoch ms)。doing 以外では null
   completedAt: number | null; // done に入った時刻。done 以外では null
 };
 ```

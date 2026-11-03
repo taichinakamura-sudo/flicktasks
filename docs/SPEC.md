@@ -18,17 +18,17 @@
 ## 1. データモデル
 
 ```ts
-type Status   = "inbox" | "doing" | "done";        // 表示名: メモ / 進行中 / 完了
-type Priority = "low" | "mid" | "high";            // 表示名: 低 / 中 / 高
-type Step     = { text: string; done: boolean };
+type Status = "inbox" | "doing" | "done"; // 表示名: メモ / 進行中 / 完了
+type Priority = "low" | "mid" | "high"; // 表示名: 低 / 中 / 高
+type Step = { text: string; done: boolean };
 
 type Task = {
-  id: string;          // クライアント生成の UUID(楽観的追加とゲスト取り込みで同じ id を使うため)
-  text: string;        // 1〜2000 文字。改行可
-  status: Status;      // 既定 "inbox"
+  id: string; // クライアント生成の UUID(楽観的追加とゲスト取り込みで同じ id を使うため)
+  text: string; // 1〜2000 文字。改行可
+  status: Status; // 既定 "inbox"
   priority: Priority | null;
-  steps: Step[];       // 最大 20。AI 整理で生成されるチェックリスト
-  createdAt: number;   // epoch ms。一覧は createdAt 降順(新しいものが上)
+  steps: Step[]; // 最大 20。AI 整理で生成されるチェックリスト
+  createdAt: number; // epoch ms。一覧は createdAt 降順(新しいものが上)
   updatedAt: number;
 };
 
@@ -164,17 +164,17 @@ inbox  <--左フリック--  doing  <--左フリック--  done
 
 ## 9. API
 
-| Method | Path | Body / 備考 |
-| --- | --- | --- |
-| GET | `/api/me` | → `{ user: User \| null }` |
-| GET | `/api/tasks` | → `{ tasks: Task[] }`(createdAt 降順) |
-| POST | `/api/tasks` | `Task`(id 任意)→ 201 `{ task }` |
-| POST | `/api/tasks/import` | `{ tasks: Task[] }`(≤500)→ `{ tasks }`(取り込み後の全件) |
-| PATCH | `/api/tasks/:id` | `Partial<{text,status,priority,steps}>`(空は 400)→ `{ task }` |
-| DELETE | `/api/tasks/:id` | → `{ ok: true }` / 404 |
-| POST | `/api/ai/refine` | `{ text }` → `{ refinement }` / 503 |
-| GET | `/auth/google`, `/auth/google/callback` | リダイレクト |
-| POST | `/auth/logout` | |
+| Method | Path                                    | Body / 備考                                                   |
+| ------ | --------------------------------------- | ------------------------------------------------------------- |
+| GET    | `/api/me`                               | → `{ user: User \| null }`                                    |
+| GET    | `/api/tasks`                            | → `{ tasks: Task[] }`(createdAt 降順)                         |
+| POST   | `/api/tasks`                            | `Task`(id 任意)→ 201 `{ task }`                               |
+| POST   | `/api/tasks/import`                     | `{ tasks: Task[] }`(≤500)→ `{ tasks }`(取り込み後の全件)      |
+| PATCH  | `/api/tasks/:id`                        | `Partial<{text,status,priority,steps}>`(空は 400)→ `{ task }` |
+| DELETE | `/api/tasks/:id`                        | → `{ ok: true }` / 404                                        |
+| POST   | `/api/ai/refine`                        | `{ text }` → `{ refinement }` / 503                           |
+| GET    | `/auth/google`, `/auth/google/callback` | リダイレクト                                                  |
+| POST   | `/auth/logout`                          |                                                               |
 
 未ログインの `/api/*` は 401。入力検証は zod(`src/worker/index.ts`)。
 
@@ -184,12 +184,14 @@ inbox  <--左フリック--  doing  <--左フリック--  done
 
 - 背景 `#f4f6fb`。その上に 3 つのパステルのブロブ(`#bcd3ff` `#ffd1ec` `#c9f5e4`、`blur(70px)`、opacity 0.6)を 28 秒周期でゆっくり漂わせる(transform のみ = GPU)。
 - ガラス面 `.glass`:
+
   ```css
   background: rgba(255,255,255,.55);
   backdrop-filter: blur(22px) saturate(1.7);
   border: 1px solid rgba(255,255,255,.8);
   box-shadow: 0 12px 32px -14px rgba(30,40,80,.22), 0 1px 2px rgba(30,40,80,.06), inset 0 1px 0 rgba(255,255,255,.95);
   ```
+
   `::before` に 135° と 315° の白いグラデーションでスペキュラハイライト、`::after` に内側 1px の白いリング。
 - 強いガラス `.glass-strong`(シート・トースト): 背景 0.78。選択インジケータ `.glass-pill`: 白 0.92 + 影。
 - 角丸: カード・コンポーザー 22px、シート上部 28px、タブ・ボタンは pill。
@@ -201,19 +203,19 @@ inbox  <--左フリック--  doing  <--左フリック--  done
 
 ### アニメーション一覧(motion のパラメータ)
 
-| 対象 | 値 |
-| --- | --- |
-| カード追加 | opacity 0→1, y -14→0, scale .96→1, spring 420/36 |
-| カード退場(フリック) | x ±480, opacity 0, scale .9, 320ms ease-out |
-| 並び替え | `layout`(spring 420/36) |
-| タブ・ステータスのインジケータ | `layoutId` spring 500/38 |
-| 件数バッジ更新 | scale .6→1 |
-| シート | y 100%→0 spring 380/36 |
-| トースト | y 40→0 spring 420/32 |
-| チェック | scale 0→1 spring 600/30 |
-| 追加ボタン | scale [1,1.25,1], rotate [0,90,90] 450ms |
-| ボタン押下 | whileTap scale .9〜.95 |
-| スケルトン退場 | opacity 0, scale 1.015, blur 6px, 450ms |
+| 対象                           | 値                                               |
+| ------------------------------ | ------------------------------------------------ |
+| カード追加                     | opacity 0→1, y -14→0, scale .96→1, spring 420/36 |
+| カード退場(フリック)           | x ±480, opacity 0, scale .9, 320ms ease-out      |
+| 並び替え                       | `layout`(spring 420/36)                          |
+| タブ・ステータスのインジケータ | `layoutId` spring 500/38                         |
+| 件数バッジ更新                 | scale .6→1                                       |
+| シート                         | y 100%→0 spring 380/36                           |
+| トースト                       | y 40→0 spring 420/32                             |
+| チェック                       | scale 0→1 spring 600/30                          |
+| 追加ボタン                     | scale [1,1.25,1], rotate [0,90,90] 450ms         |
+| ボタン押下                     | whileTap scale .9〜.95                           |
+| スケルトン退場                 | opacity 0, scale 1.015, blur 6px, 450ms          |
 
 ---
 
