@@ -18,7 +18,7 @@
 ## 1. データモデル
 
 ```ts
-type Status = "inbox" | "doing" | "done"; // 表示名: メモ / 進行中 / 完了
+type Status = "inbox" | "today" | "doing" | "done"; // 表示名: メモ / 今日 / 今から / 完了
 type Priority = "low" | "mid" | "high"; // 表示名: 低 / 中 / 高
 type Step = { text: string; done: boolean };
 
@@ -28,6 +28,10 @@ type Task = {
   status: Status; // 既定 "inbox"
   priority: Priority | null;
   steps: Step[]; // 最大 20。AI 整理で生成されるチェックリスト
+  estimateMin: number | null; // 見積もり分(1〜1440)。null = 未設定
+  actualMs: number; // 実測の累計ミリ秒。doing(今から)滞在時間の自動計測
+  doingSince: number | null; // doing に入った時刻(epoch ms)。doing 以外では null
+  completedAt: number | null; // done に入った時刻。done 以外では null
   createdAt: number; // epoch ms。一覧は createdAt 降順(新しいものが上)
   updatedAt: number;
 };
@@ -35,19 +39,24 @@ type Task = {
 type User = { id: string; email: string; name: string | null; picture: string | null };
 ```
 
-参考: `src/shared/types.ts`, `migrations/0001_init.sql`
+参考: `src/shared/types.ts`, `migrations/0001_init.sql`, `migrations/0002_hidane_flow.sql`
 
 ### ステータス遷移
 
 ```
-inbox  --右フリック-->  doing  --右フリック-->  done
-inbox  <--左フリック--  doing  <--左フリック--  done
+inbox  --右-->  today  --右-->  doing  --右-->  done
+inbox  <--左--  today  <--左--  doing  <--左--  done
 ```
 
 - 端(`done` で右、`inbox` で左)では何も起きず、カードはスプリングで元位置へ戻る。
+- **doing(今から)は常に最大 1 件**(1 点集中)。別のタスクを doing にすると、既存の doing は自動で today に戻る。
+  読み込み時(ローカル / サーバー / 取り込み)にも正規化する(計測中の最新 1 件を残す)。
+- **実績時間は手入力しない**。doing に入った時刻を `doingSince` に記録し、出るときに
+  `actualMs += now - doingSince` と加算する(`applyStatus`)。done に入ると `completedAt` が立ち、
+  左フリックで戻すと null に戻る(actualMs は保持)。
 - 削除はフリックではなく詳細シートから行う(誤操作防止)。削除は常に「元に戻す」付き。
 
-参考: `nextStatus` / `prevStatus` in `src/shared/types.ts`
+参考: `nextStatus` / `prevStatus` in `src/shared/types.ts`, `applyStatus` / `normalizeDoing` in `src/shared/flow.ts`
 
 ---
 
@@ -57,14 +66,21 @@ inbox  <--左フリック--  doing  <--左フリック--  done
 
 1. **ヘッダー**: 左にアプリ名(小さく)、右にログインボタン(未ログイン: Google アイコン+「ログイン」)またはアバター(ログイン済み)。アバタータップでメニュー(名前・メール・ログアウト)。
 2. **コンポーザー**(メモ入力): 1 行の自動伸長テキストエリア、プレースホルダは「メモ」のみ。右に円形の追加ボタン。
-3. **ステータスタブ**: 「メモ / 進行中 / 完了」の 3 分割セグメント。各タブに件数バッジ。選択インジケータはタブ間をスライド移動する。
-4. **タスク一覧**: 選択中ステータスのカードを縦並び。空なら薄い点線の円を 1 つ置くだけ(文言なし)。
-5. **詳細シート**(カードタップで下から出るボトムシート)。
-6. **トースト**(画面下中央のピル)。
+3. **ステータスタブ**: 「メモ / 今日 / 完了」の 3 分割セグメント(doing はタブにせず固定カードが受け持つ)。
+   各タブに件数バッジ(今日 = today + doing)。選択インジケータはタブ間をスライド移動する。
+4. **「▶ 今から」固定カード**: doing のタスクがあるときだけ、どのタブでも表示。経過時間を 1 秒ごとに
+   ライブ表示(`m:ss`、1 時間以上は `h:mm:ss`)し、見積もりがあれば `/ 30分` を併記、超過で経過時間がローズ色。
+   右フリック=完了 / 左フリック=今日に戻す / タップ=詳細シート。`.glass-strong` + 紫のリング。
+5. **予実サマリー行**(今日タブのみ・対象 0 件なら非表示): `計画 ○分 ・ 実績 ○分` + 計画比のプログレスバー。
+   対象 = today/doing 全件 + その日(端末ローカルタイム)に完了した done。
+6. **タスク一覧**: 選択中ステータスのカードを縦並び。空なら薄い点線の円を 1 つ置くだけ(文言なし)。
+   カードのメタ行に見積もり(`30分`)と実績(`実 12分`、1 分以上のとき)。done カードは `見積30分 → 実45分`。
+7. **詳細シート**(カードタップで下から出るボトムシート)。
+8. **トースト**(画面下中央のピル)。
 
 最大幅 560px で中央寄せ。セーフエリア(`env(safe-area-inset-*)`)を考慮する。
 
-参考: `src/client/App.tsx`
+参考: `src/client/App.tsx`, `src/client/components/NowCard.tsx`, `PlanSummary.tsx`
 
 ---
 
@@ -85,8 +101,8 @@ inbox  <--左フリック--  doing  <--左フリック--  done
 
 - カードは横方向のみドラッグ可(`dragDirectionLock`、`touch-action: pan-y` で縦スクロールと共存)。
 - ドラッグ量に応じてカードの背後から次の状態のレイヤーがせり出す:
-  - 右ドラッグ: 左側に「→ 進行中へ」/「✓ 完了へ」(青 / 緑のガラス)。
-  - 左ドラッグ: 右側に「メモへ戻す ←」/「進行中へ戻す ←」(琥珀色のガラス)。
+  - 右ドラッグ: 左側に「次の状態へ」のレイヤー(今日へ=空色 / 今からへ=紫 / 完了へ=緑のガラス)。
+  - 左ドラッグ: 右側に「前の状態へ戻す」のレイヤー(琥珀色のガラス)。
   - レイヤーの不透明度は 0 → 40px で 0.4 → 88px で 1.0。ラベルは scale 0.7 → 1.1。カード自体は最大 ±2.5° 傾く。
 - **フリック判定**(ドラッグ終了時): `|offset.x| > 88px` または `|velocity.x| > 550px/s`。
 - 判定成立: ステータス変更 → カードはフリック方向へ飛んで退場(x ±480px、opacity 0、scale 0.9、320ms)。残りのカードは `layout` アニメーションで詰まる。件数バッジが更新される。
@@ -102,11 +118,12 @@ inbox  <--左フリック--  doing  <--左フリック--  done
 - 下からスプリングで出る(stiffness 380 / damping 36)。背景は暗転+軽いぼかし。背景タップ、×ボタン、下方向へ 120px 以上または 600px/s 以上のドラッグで閉じる。
 - 内容(上から):
   1. 本文テキストエリア(blur で保存。空なら元に戻す)
-  2. ステータス 3 分割(インジケータがスライド)
+  2. ステータス 4 分割 メモ/今日/今から/完了(インジケータがスライド)
   3. 優先度チップ 低/中/高(同じものをもう一度押すと解除)
-  4. ステップのチェックリスト(存在する場合)。チェックは丸が緑に塗りつぶされ、チェックマークがスプリングで出る。取り消し線。
-  5. AI 提案カード(「AIで整理」の結果。タイトル・番号付き手順・優先度・「適用」「閉じる」)
-  6. アクション行: 「AIで整理」(処理中はアイコンが回転し「整理中…」)、削除(赤)、閉じる
+  4. 見積もりチップ 15/30/60/90 + 数値入力(分、1〜1440 のみ受理。同じチップをもう一度押すと解除)
+  5. ステップのチェックリスト(存在する場合)。チェックは丸が緑に塗りつぶされ、チェックマークがスプリングで出る。取り消し線。
+  6. AI 提案カード(「AIで整理」の結果。タイトル・番号付き手順・優先度・「適用」「閉じる」)
+  7. アクション行: 「AIで整理」(処理中はアイコンが回転し「整理中…」)、削除(赤)、閉じる
 - カード側にはステップの進捗(緑のバー + `done/total`)を表示する。
 
 参考: `src/client/components/TaskSheet.tsx`
@@ -164,17 +181,17 @@ inbox  <--左フリック--  doing  <--左フリック--  done
 
 ## 9. API
 
-| Method | Path                                    | Body / 備考                                                   |
-| ------ | --------------------------------------- | ------------------------------------------------------------- |
-| GET    | `/api/me`                               | → `{ user: User \| null }`                                    |
-| GET    | `/api/tasks`                            | → `{ tasks: Task[] }`(createdAt 降順)                         |
-| POST   | `/api/tasks`                            | `Task`(id 任意)→ 201 `{ task }`                               |
-| POST   | `/api/tasks/import`                     | `{ tasks: Task[] }`(≤500)→ `{ tasks }`(取り込み後の全件)      |
-| PATCH  | `/api/tasks/:id`                        | `Partial<{text,status,priority,steps}>`(空は 400)→ `{ task }` |
-| DELETE | `/api/tasks/:id`                        | → `{ ok: true }` / 404                                        |
-| POST   | `/api/ai/refine`                        | `{ text }` → `{ refinement }` / 503                           |
-| GET    | `/auth/google`, `/auth/google/callback` | リダイレクト                                                  |
-| POST   | `/auth/logout`                          |                                                               |
+| Method | Path                                    | Body / 備考                                                                                               |
+| ------ | --------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/me`                               | → `{ user: User \| null }`                                                                                |
+| GET    | `/api/tasks`                            | → `{ tasks: Task[] }`(createdAt 降順)                                                                     |
+| POST   | `/api/tasks`                            | `Task`(id 任意)→ 201 `{ task }`                                                                           |
+| POST   | `/api/tasks/import`                     | `{ tasks: Task[] }`(≤500)→ `{ tasks }`(取り込み後の全件)                                                  |
+| PATCH  | `/api/tasks/:id`                        | `Partial<{text,status,priority,steps,estimateMin,actualMs,doingSince,completedAt}>`(空は 400)→ `{ task }` |
+| DELETE | `/api/tasks/:id`                        | → `{ ok: true }` / 404                                                                                    |
+| POST   | `/api/ai/refine`                        | `{ text }` → `{ refinement }` / 503                                                                       |
+| GET    | `/auth/google`, `/auth/google/callback` | リダイレクト                                                                                              |
+| POST   | `/auth/logout`                          |                                                                                                           |
 
 未ログインの `/api/*` は 401。入力検証は zod(`src/worker/index.ts`)。
 
@@ -226,10 +243,18 @@ inbox  <--左フリック--  doing  <--左フリック--  done
 3. Enter で追加され、新しいものが上。リロード後も残る。件数バッジが正しい。
 4. 空・空白のみは追加されない。IME 変換中の Enter では送信されない。
 5. フォーカスがない状態でキーを打つとコンポーザーに入る。
-6. 右フリックで inbox→doing→done、左で戻る。done で右フリックは跳ね返る。30px の短いドラッグは無視。
-7. シートで本文・優先度・ステータスを変更できる。削除後「元に戻す」で復活。
-8. ログイン後「AIで整理」→ 提案 → 適用でステップが出る → チェックで `1/3` 表示 → サーバーにも反映。
-9. ゲストのメモがログイン時にサーバーへ取り込まれ、localStorage を消しても復元される。ログアウトで手元から消える。
-10. 未ログインの `/api/tasks` は 401。
+6. 右フリックで inbox→today、左で戻る。inbox で左フリックは跳ね返る。30px の短いドラッグは無視。
+7. today を右フリックすると「▶ 今から」固定カードが現れ、経過時間が進む。2 件目を今からにすると
+   先のタスクは today に戻る(常に 1 件)。固定カード右フリックで done になり実績が残る。
+   done で右フリックは跳ね返る。リロードしても actualMs が残る。
+8. doing のままリロードしても計測が継続する(`doingSince` 復元)。
+9. シートで見積もりチップを設定・解除でき、カードに `30分` が出る。数値入力は 1〜1440 のみ受理。
+10. 今日タブに予実サマリーが出て、計画(見積もり合計)・実績の数字が正しい。メモタブでは出ない。
+11. シートで本文・優先度・ステータスを変更できる。削除後「元に戻す」で復活。
+    今から中のタスクを削除→「元に戻す」で今からに復帰する。
+12. ログイン後「AIで整理」→ 提案 → 適用でステップが出る → チェックで `1/3` 表示 → サーバーにも反映。
+13. ゲストのメモ(見積もり・実績つき)がログイン時にサーバーへ取り込まれ、localStorage を消しても復元される。
+    ログアウトで手元から消える。
+14. 未ログインの `/api/tasks` は 401。
 
 参考: `e2e/app.spec.ts`, `e2e/helpers.ts`(フリックの再現方法)
