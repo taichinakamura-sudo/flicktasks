@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import type { Priority, Status, Step, Task, User } from "../shared/types";
+import { applyStatus, hydrateTask, normalizeDoing } from "../shared/flow";
+import type { Priority, Status, Step, Task, TaskPatch, User } from "../shared/types";
 import { api } from "./api";
 
 const STORAGE_KEY = "flicktasks:v1";
@@ -23,7 +24,7 @@ type State = {
   boot: () => Promise<void>;
   setFilter: (f: Status) => void;
   addTask: (text: string) => Task | null;
-  updateTask: (id: string, patch: Partial<Pick<Task, "text" | "status" | "priority" | "steps">>) => void;
+  updateTask: (id: string, patch: TaskPatch) => void;
   flick: (id: string, dir: 1 | -1) => boolean;
   toggleStep: (id: string, index: number) => void;
   removeTask: (id: string) => void;
@@ -38,7 +39,9 @@ function loadLocal(): Persisted {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ownerId: null, tasks: [] };
     const p = JSON.parse(raw) as Partial<Persisted>;
-    return { ownerId: p.ownerId ?? null, tasks: Array.isArray(p.tasks) ? p.tasks : [] };
+    // 旧形式(新フィールド無し)のデータにも既定値を補完して読む
+    const tasks = Array.isArray(p.tasks) ? p.tasks.map(hydrateTask).filter((t): t is Task => t !== null) : [];
+    return { ownerId: p.ownerId ?? null, tasks };
   } catch {
     return { ownerId: null, tasks: [] };
   }
@@ -64,6 +67,15 @@ export const useStore = create<State>()((set, get) => {
     fn().catch(() => get().showToast("同期に失敗しました"));
   };
 
+  /** 読み込み正規化で今日へ押し出された分をサーバーへ反映(boot中はuser未セットのため直接呼ぶ) */
+  const pushDemoted = (demoted: Task[]) => {
+    for (const d of demoted) {
+      api
+        .updateTask(d.id, { status: d.status, actualMs: d.actualMs, doingSince: d.doingSince })
+        .catch(() => {});
+    }
+  };
+
   return {
     booted: false,
     user: null,
@@ -77,7 +89,8 @@ export const useStore = create<State>()((set, get) => {
     boot: async () => {
       const started = performance.now();
       const local = loadLocal();
-      set({ tasks: sortTasks(local.tasks), ownerId: local.ownerId });
+      // doingは最大1件(今から)。旧データや復元で複数あればここで正規化する
+      set({ tasks: normalizeDoing(sortTasks(local.tasks), Date.now()).tasks, ownerId: local.ownerId });
 
       let user: User | null = null;
       try {
@@ -97,7 +110,9 @@ export const useStore = create<State>()((set, get) => {
           } else {
             tasks = (await api.listTasks()).tasks;
           }
-          set({ user, ownerId: user.id, tasks: sortTasks(tasks) });
+          const norm = normalizeDoing(sortTasks(tasks), Date.now());
+          pushDemoted(norm.demoted);
+          set({ user, ownerId: user.id, tasks: norm.tasks });
         } catch {
           // オフライン等: 同じユーザーならローカルキャッシュをそのまま使う
           set({ user, ownerId: user.id, tasks: local.ownerId === user.id ? get().tasks : [] });
@@ -137,10 +152,39 @@ export const useStore = create<State>()((set, get) => {
     },
 
     updateTask: (id, patch) => {
+      const now = Date.now();
+      const current = get().tasks.find((t) => t.id === id);
+      if (!current) return;
+      let next: Task = { ...current, ...patch, updatedAt: now };
+      let payload: TaskPatch = patch;
+      const demoted: Task[] = [];
+      if (patch.status !== undefined && patch.status !== current.status) {
+        // 遷移副作用(タイマー・完了時刻)を適用。doingへ入れる時は他のdoingを今日へ押し出す(今からは1件)
+        next = { ...applyStatus(current, patch.status, now), ...patch, updatedAt: now };
+        payload = {
+          ...patch,
+          actualMs: next.actualMs,
+          doingSince: next.doingSince,
+          completedAt: next.completedAt,
+        };
+        if (patch.status === "doing") {
+          for (const t of get().tasks) {
+            if (t.id !== id && t.status === "doing") {
+              demoted.push({ ...applyStatus(t, "today", now), updatedAt: now });
+            }
+          }
+        }
+      }
+      const demotedById = new Map(demoted.map((d) => [d.id, d]));
       set((s) => ({
-        tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: Date.now() } : t)),
+        tasks: s.tasks.map((t) => (t.id === id ? next : (demotedById.get(t.id) ?? t))),
       }));
-      remote(() => api.updateTask(id, patch));
+      remote(() => api.updateTask(id, payload));
+      for (const d of demoted) {
+        remote(() =>
+          api.updateTask(d.id, { status: d.status, actualMs: d.actualMs, doingSince: d.doingSince }),
+        );
+      }
     },
 
     flick: (id, dir) => {
@@ -167,7 +211,8 @@ export const useStore = create<State>()((set, get) => {
       set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id), sheetTaskId: null }));
       remote(() => api.deleteTask(id));
       get().showToast("削除しました", () => {
-        set((s) => ({ tasks: sortTasks([task, ...s.tasks]) }));
+        // 復元でdoingが2件にならないよう正規化を通す
+        set((s) => ({ tasks: normalizeDoing(sortTasks([task, ...s.tasks]), Date.now()).tasks }));
         remote(() => api.createTask(task));
       });
     },

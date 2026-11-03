@@ -22,6 +22,14 @@ export type Task = {
 
 export const ESTIMATE_CHIPS = [15, 30, 60, 90] as const;
 
+/** クライアント→APIのPATCHで送れるフィールド */
+export type TaskPatch = Partial<
+  Pick<
+    Task,
+    "text" | "status" | "priority" | "steps" | "estimateMin" | "actualMs" | "doingSince" | "completedAt"
+  >
+>;
+
 export type User = {
   id: string;
   email: string;
