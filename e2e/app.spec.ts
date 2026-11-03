@@ -210,6 +210,35 @@ test("今からのままリロードしても計測が継続する", async ({ pa
   await expect(page.getByTestId("now-elapsed")).not.toHaveText(/^0:00/);
 });
 
+test("日付をまたぐと予実サマリーが昨日の完了を引きずらない", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T23:57:00") });
+  await openApp(page);
+  await addMemo(page, "深夜タスク");
+  const card = () => page.getByTestId("task-card").filter({ hasText: "深夜タスク" });
+
+  await card().click();
+  await expect(page.getByTestId("sheet")).toBeVisible();
+  await page.getByTestId("estimate-30").click();
+  await expect(page.getByTestId("estimate-30")).toHaveAttribute("aria-pressed", "true");
+  await page.getByTestId("sheet-close").click();
+  await expect(page.getByTestId("sheet")).toBeHidden();
+
+  // 今日→今から→完了(completedAtは23:57頃)
+  await flick(card(), 1);
+  await page.getByTestId("tab-today").click();
+  await expect(page.getByTestId("plan-summary")).toContainText("計画 30分");
+  await flick(card(), 1);
+  await expect(page.getByTestId("now-card")).toBeVisible();
+  await flick(page.getByTestId("now-card"), 1);
+  await expect(page.getByTestId("now-card")).toBeHidden();
+  // 今日完了した分はサマリーに含まれ続ける
+  await expect(page.getByTestId("plan-summary")).toContainText("計画 30分");
+
+  // 日付をまたぐ → 昨日の完了は対象外になり、today/doingも無いのでサマリーごと消える
+  await page.clock.fastForward("05:00");
+  await expect(page.getByTestId("plan-summary")).toHaveCount(0);
+});
+
 test("今から中のタスクを削除→元に戻すと今からに復帰する", async ({ page }) => {
   await openApp(page);
   await addMemo(page, "削除テスト");

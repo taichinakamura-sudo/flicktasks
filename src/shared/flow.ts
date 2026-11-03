@@ -53,17 +53,21 @@ export function hydrateTask(raw: unknown): Task | null {
           typeof (s as Step).done === "boolean",
       )
     : [];
+  const doingSince = numOrNull(r.doingSince);
+  // 旧仕様の doing(計測情報なし)は today に落とす。新仕様の doing は必ず doingSince を持つ
+  // (applyStatus が保証)ので、勝手にフォーカス枠へ昇格させない(0002 マイグレーションと同じ思想)
+  const status = r.status === "doing" && doingSince === null ? "today" : r.status;
   return {
     id: r.id,
     text: r.text,
-    status: r.status,
+    status,
     priority: PRIORITIES.includes(r.priority as (typeof PRIORITIES)[number])
       ? (r.priority as Task["priority"])
       : null,
     steps,
     estimateMin: numOrNull(r.estimateMin),
     actualMs: num(r.actualMs, 0),
-    doingSince: numOrNull(r.doingSince),
+    doingSince,
     completedAt: numOrNull(r.completedAt),
     createdAt: num(r.createdAt, 0),
     updatedAt: num(r.updatedAt, 0),

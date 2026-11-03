@@ -7,8 +7,9 @@ import { useTick } from "../useTick";
 export function PlanSummary() {
   const filter = useStore((s) => s.filter);
   const tasks = useStore((s) => s.tasks);
-  const anyDoing = tasks.some((t) => t.status === "doing");
-  const now = useTick(anyDoing);
+  // 今日タブ表示中は1秒ごとに現在時刻で再評価する。doing不在時に時刻が固定されると、
+  // 日付をまたいだとき昨日の完了をサマリーに引きずってしまう(sameLocalDayが古いnowで評価される)
+  const now = useTick(filter === "today");
 
   if (filter !== "today") return null;
   const { planMin, actualMs, empty } = planActual(tasks, now);

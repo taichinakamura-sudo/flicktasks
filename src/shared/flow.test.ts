@@ -113,8 +113,15 @@ describe("hydrateTask", () => {
     expect(t?.actualMs).toBe(0);
     expect(t?.doingSince).toBeNull();
     expect(t?.completedAt).toBeNull();
-    expect(t?.status).toBe("doing");
+    // 旧仕様のdoing(計測情報なし)は勝手にフォーカス枠へ昇格させず今日に落とす(0002と同じ思想)
+    expect(t?.status).toBe("today");
     expect(t?.priority).toBe("mid");
+  });
+
+  it("doingSinceを持つdoing(新仕様の計測中)はdoingのまま通る", () => {
+    const t = hydrateTask(base({ status: "doing", doingSince: 5000 }));
+    expect(t?.status).toBe("doing");
+    expect(t?.doingSince).toBe(5000);
   });
 
   it("新フィールド付きのタスクはそのまま通る", () => {
