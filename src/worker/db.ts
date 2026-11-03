@@ -81,7 +81,10 @@ export async function updateTask(
   userId: string,
   id: string,
   patch: Partial<
-    Pick<Task, "text" | "status" | "priority" | "steps" | "estimateMin" | "actualMs" | "doingSince" | "completedAt">
+    Pick<
+      Task,
+      "text" | "status" | "priority" | "steps" | "estimateMin" | "actualMs" | "doingSince" | "completedAt"
+    >
   >,
 ): Promise<Task | null> {
   const sets: string[] = [];
