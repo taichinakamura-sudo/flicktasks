@@ -66,41 +66,69 @@ test("どこにもフォーカスがない状態でキーを打つとメモ欄�
   await expect(page.getByTestId("composer")).toHaveValue("abc");
 });
 
-test("フリックでステータスを進める / 戻す", async ({ page }) => {
+test("フリックでステータスを進める / 戻す(メモ⇄今日)", async ({ page }) => {
   await openApp(page);
   await addMemo(page, "フリックするタスク");
   const card = () => page.getByTestId("task-card").filter({ hasText: "フリックするタスク" });
 
-  // 右フリック: メモ → 進行中
+  // 右フリック: メモ → 今日
   await flick(card(), 1);
   await expect(page.getByTestId("count-inbox")).toHaveText("0");
-  await expect(page.getByTestId("count-doing")).toHaveText("1");
+  await expect(page.getByTestId("count-today")).toHaveText("1");
   await expect(card()).toHaveCount(0);
 
-  await page.getByTestId("tab-doing").click();
+  await page.getByTestId("tab-today").click();
   await expect(card()).toBeVisible();
-  await expect(card()).toHaveAttribute("data-status", "doing");
+  await expect(card()).toHaveAttribute("data-status", "today");
 
-  // 右フリック: 進行中 → 完了
-  await flick(card(), 1);
-  await expect(page.getByTestId("count-done")).toHaveText("1");
-  await page.getByTestId("tab-done").click();
-  await expect(card()).toHaveAttribute("data-status", "done");
-
-  // 完了でさらに右フリックしても何も起きない(跳ね返る)
-  await flick(card(), 1);
-  await expect(page.getByTestId("count-done")).toHaveText("1");
-  await expect(card()).toBeVisible();
-
-  // 左フリック: 完了 → 進行中
+  // 左フリック: 今日 → メモ
   await flick(card(), -1);
-  await expect(page.getByTestId("count-doing")).toHaveText("1");
-  await expect(page.getByTestId("count-done")).toHaveText("0");
+  await expect(page.getByTestId("count-inbox")).toHaveText("1");
+  await expect(page.getByTestId("count-today")).toHaveText("0");
+
+  // メモで左フリックしても何も起きない(跳ね返る)
+  await page.getByTestId("tab-inbox").click();
+  await flick(card(), -1);
+  await expect(page.getByTestId("count-inbox")).toHaveText("1");
+  await expect(card()).toBeVisible();
 
   // 短いドラッグはフリックとみなさない
-  await page.getByTestId("tab-doing").click();
   await flick(card(), 1, 30);
-  await expect(page.getByTestId("count-doing")).toHaveText("1");
+  await expect(page.getByTestId("count-inbox")).toHaveText("1");
+});
+
+test("シートで見積もりを設定・解除できる", async ({ page }) => {
+  await openApp(page);
+  await addMemo(page, "見積もりタスク");
+  const card = () => page.getByTestId("task-card").filter({ hasText: "見積もりタスク" });
+
+  await card().click();
+  await page.getByTestId("estimate-30").click();
+  await expect(page.getByTestId("estimate-30")).toHaveAttribute("aria-pressed", "true");
+  await page.getByTestId("sheet-close").click();
+  await expect(card()).toContainText("30分");
+
+  // 同じチップをもう一度押すと解除
+  await card().click();
+  await page.getByTestId("estimate-30").click();
+  await expect(page.getByTestId("estimate-30")).toHaveAttribute("aria-pressed", "false");
+  await page.getByTestId("sheet-close").click();
+  await expect(card()).not.toContainText("30分");
+
+  // 数値入力(1〜1440のみ受理)
+  await card().click();
+  await page.getByTestId("estimate-input").fill("45");
+  await page.getByTestId("estimate-input").press("Enter");
+  await page.getByTestId("sheet-close").click();
+  await expect(card()).toContainText("45分");
+
+  await card().click();
+  await page.getByTestId("estimate-input").fill("0");
+  await page.getByTestId("estimate-input").press("Enter");
+  await page.getByTestId("estimate-input").fill("2000");
+  await page.getByTestId("estimate-input").press("Enter");
+  await page.getByTestId("sheet-close").click();
+  await expect(card()).toContainText("45分");
 });
 
 test("タップで詳細シート: 編集・優先度・削除と元に戻す", async ({ page }) => {
@@ -113,11 +141,11 @@ test("タップで詳細シート: 編集・優先度・削除と元に戻す", 
   await page.getByTestId("sheet-text").fill("編集済みタスク");
   await page.getByTestId("priority-high").click();
   await expect(page.getByTestId("priority-high")).toHaveAttribute("aria-pressed", "true");
-  await page.getByTestId("sheet-status-doing").click();
+  await page.getByTestId("sheet-status-today").click();
   await page.getByTestId("sheet-close").click();
   await expect(sheet).toBeHidden();
 
-  await page.getByTestId("tab-doing").click();
+  await page.getByTestId("tab-today").click();
   await expect(page.getByTestId("task-text").first()).toHaveText("編集済みタスク");
   await expect(page.getByRole("img", { name: "優先度 高" })).toBeVisible();
 

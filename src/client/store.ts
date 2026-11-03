@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { applyStatus, hydrateTask, normalizeDoing } from "../shared/flow";
 import type { Priority, Status, Step, Task, TaskPatch, User } from "../shared/types";
+import { nextStatus, prevStatus } from "../shared/types";
 import { api } from "./api";
 
 const STORAGE_KEY = "flicktasks:v1";
@@ -190,8 +191,7 @@ export const useStore = create<State>()((set, get) => {
     flick: (id, dir) => {
       const task = get().tasks.find((t) => t.id === id);
       if (!task) return false;
-      const order: Status[] = ["inbox", "doing", "done"];
-      const next = order[order.indexOf(task.status) + dir];
+      const next = dir === 1 ? nextStatus(task.status) : prevStatus(task.status);
       if (!next) return false;
       set({ lastFlickDir: dir });
       get().updateTask(id, { status: next });

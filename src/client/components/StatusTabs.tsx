@@ -1,7 +1,10 @@
 import { motion } from "motion/react";
 import { useMemo } from "react";
-import { STATUS_LABEL, STATUSES } from "../../shared/types";
+import { STATUS_LABEL } from "../../shared/types";
 import { useStore } from "../store";
+
+// doing(今から)は最大1件で「▶ 今から」固定カードが受け持つため、タブは3つ
+const TAB_STATUSES = ["inbox", "today", "done"] as const;
 
 export function StatusTabs() {
   const filter = useStore((s) => s.filter);
@@ -10,12 +13,14 @@ export function StatusTabs() {
   const counts = useMemo(() => {
     const c = { inbox: 0, today: 0, doing: 0, done: 0 };
     for (const t of tasks) c[t.status]++;
+    // doing中のタスクも「今日の仕事」なので今日の件数に含める
+    c.today += c.doing;
     return c;
   }, [tasks]);
 
   return (
     <div className="glass flex rounded-full p-1" role="tablist" aria-label="ステータス">
-      {STATUSES.map((st) => {
+      {TAB_STATUSES.map((st) => {
         const active = st === filter;
         return (
           <button

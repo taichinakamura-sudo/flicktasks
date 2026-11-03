@@ -1,5 +1,6 @@
 import { motion, type PanInfo, useMotionValue, useTransform } from "motion/react";
 import { useRef } from "react";
+import { elapsedMs, formatMin } from "../../shared/flow";
 import { nextStatus, prevStatus, STATUS_LABEL, type Task } from "../../shared/types";
 import { PRIORITY_LABEL, useStore } from "../store";
 import { ArrowLeftIcon, ArrowRightIcon, CheckIcon } from "./Icons";
@@ -51,6 +52,8 @@ export function TaskCard({ task }: { task: Task }) {
   };
 
   const doneSteps = task.steps.filter((s) => s.done).length;
+  // 一覧は秒単位で動かさない(経過のライブ表示は「▶ 今から」固定カードが担当)
+  const actMin = Math.floor(elapsedMs(task, Date.now()) / 60_000);
 
   return (
     <div className="relative" data-testid="task-card" data-status={task.status} data-id={task.id}>
@@ -59,7 +62,7 @@ export function TaskCard({ task }: { task: Task }) {
         aria-hidden
         style={{ opacity: fwdOpacity }}
         className={`absolute inset-0 flex items-center justify-start rounded-[22px] pl-5 ${
-          fwd === "done" ? "bg-emerald-200/70" : "bg-sky-200/70"
+          fwd === "done" ? "bg-emerald-200/70" : fwd === "doing" ? "bg-violet-200/70" : "bg-sky-200/70"
         }`}
       >
         <motion.span
@@ -139,6 +142,29 @@ export function TaskCard({ task }: { task: Task }) {
         </div>
         <div className="mt-2 flex items-center gap-3 text-[12px] text-faint">
           <span>{relTime(task.createdAt)}</span>
+          {task.status === "done" && (task.estimateMin !== null || actMin >= 1) ? (
+            <span className="tabular-nums" data-testid="card-plan-actual">
+              {[
+                task.estimateMin !== null ? `見積${formatMin(task.estimateMin)}` : null,
+                actMin >= 1 ? `実${formatMin(actMin)}` : null,
+              ]
+                .filter(Boolean)
+                .join(" → ")}
+            </span>
+          ) : (
+            <>
+              {task.estimateMin !== null && (
+                <span className="tabular-nums" data-testid="card-estimate">
+                  {formatMin(task.estimateMin)}
+                </span>
+              )}
+              {actMin >= 1 && (
+                <span className="tabular-nums" data-testid="card-actual">
+                  実 {formatMin(actMin)}
+                </span>
+              )}
+            </>
+          )}
           {task.steps.length > 0 && (
             <span className="flex items-center gap-1.5">
               <span className="relative h-1.5 w-16 overflow-hidden rounded-full bg-black/8">
