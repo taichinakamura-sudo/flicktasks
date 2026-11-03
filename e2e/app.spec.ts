@@ -210,6 +210,66 @@ test("今からのままリロードしても計測が継続する", async ({ pa
   await expect(page.getByTestId("now-elapsed")).not.toHaveText(/^0:00/);
 });
 
+test("今から中のタスクを削除→元に戻すと今からに復帰する", async ({ page }) => {
+  await openApp(page);
+  await addMemo(page, "削除テスト");
+  const card = () => page.getByTestId("task-card").filter({ hasText: "削除テスト" });
+  await flick(card(), 1);
+  await page.getByTestId("tab-today").click();
+  await flick(card(), 1);
+  const nowCard = page.getByTestId("now-card");
+  await expect(nowCard).toBeVisible();
+
+  await nowCard.click();
+  await expect(page.getByTestId("sheet")).toBeVisible();
+  await page.getByTestId("delete").click();
+  await expect(nowCard).toBeHidden();
+  await expect(page.getByTestId("toast")).toContainText("削除しました");
+  await page.getByRole("button", { name: "元に戻す" }).click();
+  await expect(nowCard).toBeVisible();
+  await expect(nowCard).toContainText("削除テスト");
+});
+
+test("ゲストの見積もり・実績がログイン取り込み後も保たれる", async ({ page }) => {
+  await openApp(page);
+  await addMemo(page, "同期タスク");
+  const card = () => page.getByTestId("task-card").filter({ hasText: "同期タスク" });
+
+  await card().click();
+  await expect(page.getByTestId("sheet")).toBeVisible();
+  await page.getByTestId("estimate-15").click();
+  await expect(page.getByTestId("estimate-15")).toHaveAttribute("aria-pressed", "true");
+  await page.getByTestId("sheet-close").click();
+  await expect(page.getByTestId("sheet")).toBeHidden();
+
+  // 今日→今からで1秒以上計測→今日へ戻して実績を確定
+  await flick(card(), 1);
+  await page.getByTestId("tab-today").click();
+  await flick(card(), 1);
+  await expect(page.getByTestId("now-card")).toBeVisible();
+  await page.waitForTimeout(1200);
+  await flick(page.getByTestId("now-card"), -1);
+  await expect(page.getByTestId("now-card")).toBeHidden();
+
+  await devLogin(page);
+  await page.reload();
+  await expect(page.getByTestId("skeleton")).toBeHidden({ timeout: 10_000 });
+
+  // ローカルを消してもサーバーから見積もり・実績つきで復元される
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await expect(page.getByTestId("skeleton")).toBeHidden({ timeout: 10_000 });
+  await page.getByTestId("tab-today").click();
+  await expect(card()).toContainText("15分");
+  const res = await page.request.get("/api/tasks");
+  const { tasks } = (await res.json()) as {
+    tasks: { text: string; estimateMin: number | null; actualMs: number }[];
+  };
+  const t = tasks.find((x) => x.text === "同期タスク");
+  expect(t?.estimateMin).toBe(15);
+  expect(t?.actualMs ?? 0).toBeGreaterThan(1000);
+});
+
 test("今日タブに予実サマリーが出る(計画と実績)", async ({ page }) => {
   await openApp(page);
   await addMemo(page, "見積もりあり");
