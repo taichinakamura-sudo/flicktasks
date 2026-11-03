@@ -20,8 +20,7 @@
   ],
   "ai": { "binding": "AI" },
   "vars": {
-    // 本番では https://<your-worker>.workers.dev などに置き換える
-    "APP_ORIGIN": "http://localhost:4173",
+    "APP_ORIGIN": "https://flicktasks.taichi-nakamura.workers.dev",
     "GOOGLE_CLIENT_ID": ""
   },
   // E2E / ローカル専用環境: Workers AI バインディングを外す(ローカル実行では AI は必ずリモート接続 = 認証が必要なため)。
