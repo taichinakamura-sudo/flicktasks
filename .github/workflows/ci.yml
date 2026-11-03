@@ -18,14 +18,14 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Prepare E2E env (dev login + mocked AI)
+        run: cp .dev.vars.example .dev.vars
       - run: npx wrangler types
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
       - name: Build (production config)
         run: npm run build
-      - name: Prepare E2E env (dev login + mocked AI)
-        run: cp .dev.vars.example .dev.vars
       - run: npx playwright install --with-deps chromium
       - name: E2E (Playwright, mobile viewport)
         run: npm run test:e2e
