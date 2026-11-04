@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   applyStatus,
+  doneSummary,
   elapsedMs,
   formatElapsed,
   formatMin,
   hydrateTask,
   normalizeDoing,
+  periodStart,
   planActual,
   sameLocalDay,
   setActualMin,
@@ -214,6 +216,54 @@ describe("planActual", () => {
   it("対象が0件ならempty", () => {
     const r = planActual([base({ id: "f", status: "inbox" })], now);
     expect(r.empty).toBe(true);
+  });
+});
+
+describe("periodStart", () => {
+  // 2026-01-07は水曜(1/5が月曜)
+  const now = new Date(2026, 0, 7, 15, 30).getTime();
+
+  it("todayはその日の0時", () => {
+    expect(periodStart("today", now)).toBe(new Date(2026, 0, 7, 0, 0).getTime());
+  });
+
+  it("weekは月曜0時はじまり", () => {
+    expect(periodStart("week", now)).toBe(new Date(2026, 0, 5, 0, 0).getTime());
+    // 月曜当日はその日自身が開始
+    const monday = new Date(2026, 0, 5, 9, 0).getTime();
+    expect(periodStart("week", monday)).toBe(new Date(2026, 0, 5, 0, 0).getTime());
+    // 日曜は同じ週の月曜まで遡る
+    const sunday = new Date(2026, 0, 11, 9, 0).getTime();
+    expect(periodStart("week", sunday)).toBe(new Date(2026, 0, 5, 0, 0).getTime());
+  });
+
+  it("monthは1日0時はじまり", () => {
+    expect(periodStart("month", now)).toBe(new Date(2026, 0, 1, 0, 0).getTime());
+  });
+});
+
+describe("doneSummary", () => {
+  const now = new Date(2026, 0, 7, 15, 30).getTime();
+  const done = (id: string, completedAt: number, estimateMin: number | null, actualMs: number): Task =>
+    base({ id, status: "done", completedAt, estimateMin, actualMs });
+  const tasks = [
+    done("a", new Date(2026, 0, 7, 10, 0).getTime(), 30, 45 * 60_000), // 今日
+    done("b", new Date(2026, 0, 6, 10, 0).getTime(), null, 10 * 60_000), // 昨日(同週)
+    done("c", new Date(2026, 0, 4, 10, 0).getTime(), 60, 0), // 先週日曜(同月)
+    done("d", new Date(2025, 11, 31, 10, 0).getTime(), 15, 5 * 60_000), // 先月
+    base({ id: "e", status: "today", estimateMin: 99 }), // 未完了は常に対象外
+  ];
+
+  it("todayは今日完了した分だけ", () => {
+    expect(doneSummary(tasks, "today", now)).toEqual({ count: 1, planMin: 30, actualMs: 45 * 60_000 });
+  });
+
+  it("weekは月曜以降の完了分", () => {
+    expect(doneSummary(tasks, "week", now)).toEqual({ count: 2, planMin: 30, actualMs: 55 * 60_000 });
+  });
+
+  it("monthは今月の完了分", () => {
+    expect(doneSummary(tasks, "month", now)).toEqual({ count: 3, planMin: 90, actualMs: 55 * 60_000 });
   });
 });
 

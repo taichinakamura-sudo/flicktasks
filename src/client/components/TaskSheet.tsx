@@ -200,17 +200,36 @@ function SheetBody({ task }: { task: Task }) {
       </div>
 
       {/* actual (実績の手修正。計測の止め忘れで膨らんだ値を直す) */}
-      <div className="flex items-center gap-2 px-1">
+      <div className="flex flex-wrap items-center gap-2 px-1">
         <span className="text-[12px] text-mute">実績</span>
         <span data-testid="actual-current" className="text-[13px] font-medium tabular-nums">
           {formatMin(actMin)}
         </span>
+        {ESTIMATE_CHIPS.map((min) => (
+          <motion.button
+            key={min}
+            type="button"
+            whileTap={{ scale: 0.92 }}
+            aria-pressed={actMin === min}
+            data-testid={`actual-chip-${min}`}
+            onClick={() => {
+              // 同じ値をもう一度押すと0クリア
+              const next = setActualMin(task, actMin === min ? 0 : min, Date.now());
+              update(task.id, { actualMs: next.actualMs, doingSince: next.doingSince });
+            }}
+            className={`rounded-full px-3 py-1 text-[12px] font-medium tabular-nums transition-colors ${
+              actMin === min ? "bg-ink text-white" : "bg-black/5 text-mute"
+            }`}
+          >
+            {min}
+          </motion.button>
+        ))}
         <input
           type="number"
           min={0}
           max={9999}
           inputMode="numeric"
-          placeholder="分で修正"
+          placeholder="分"
           data-testid="actual-input"
           onBlur={(e) => {
             const v = Number(e.currentTarget.value);
@@ -223,7 +242,7 @@ function SheetBody({ task }: { task: Task }) {
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.nativeEvent.isComposing) e.currentTarget.blur();
           }}
-          className="w-20 rounded-full bg-black/5 px-3 py-1 text-[12px] tabular-nums outline-none placeholder:text-faint"
+          className="w-16 rounded-full bg-black/5 px-3 py-1 text-[12px] tabular-nums outline-none placeholder:text-faint"
         />
       </div>
 

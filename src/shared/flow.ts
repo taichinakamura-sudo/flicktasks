@@ -115,6 +115,32 @@ export function planActual(
   };
 }
 
+export type RetroPeriod = "today" | "week" | "month";
+
+/** 振り返り期間の開始時刻(端末ローカル)。週は月曜はじまり */
+export function periodStart(period: RetroPeriod, now: number): number {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  if (period === "week") d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  else if (period === "month") d.setDate(1);
+  return d.getTime();
+}
+
+/** 期間内に完了したタスクの件数と予実合計 */
+export function doneSummary(
+  tasks: Task[],
+  period: RetroPeriod,
+  now: number,
+): { count: number; planMin: number; actualMs: number } {
+  const start = periodStart(period, now);
+  const target = tasks.filter((t) => t.status === "done" && t.completedAt !== null && t.completedAt >= start);
+  return {
+    count: target.length,
+    planMin: target.reduce((sum, t) => sum + (t.estimateMin ?? 0), 0),
+    actualMs: target.reduce((sum, t) => sum + t.actualMs, 0),
+  };
+}
+
 /** 経過時間表示。m:ss、1時間以上は h:mm:ss */
 export function formatElapsed(ms: number): string {
   const totalSec = Math.floor(ms / 1000);
