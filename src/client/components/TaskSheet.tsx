@@ -1,6 +1,13 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
-import { PRIORITIES, type Refinement, STATUS_LABEL, STATUSES, type Task } from "../../shared/types";
+import {
+  ESTIMATE_CHIPS,
+  PRIORITIES,
+  type Refinement,
+  STATUS_LABEL,
+  STATUSES,
+  type Task,
+} from "../../shared/types";
 import { api } from "../api";
 import { PRIORITY_LABEL, useStore } from "../store";
 import { CheckIcon, CloseIcon, SparkIcon, TrashIcon } from "./Icons";
@@ -147,6 +154,43 @@ function SheetBody({ task }: { task: Task }) {
             {PRIORITY_LABEL[p]}
           </motion.button>
         ))}
+      </div>
+
+      {/* estimate (予実: 見積もり分。実測はdoing滞在時間の自動計測) */}
+      <div className="flex items-center gap-2 px-1">
+        <span className="text-[12px] text-mute">見積もり</span>
+        {ESTIMATE_CHIPS.map((min) => (
+          <motion.button
+            key={min}
+            type="button"
+            whileTap={{ scale: 0.92 }}
+            aria-pressed={task.estimateMin === min}
+            data-testid={`estimate-${min}`}
+            onClick={() => update(task.id, { estimateMin: task.estimateMin === min ? null : min })}
+            className={`rounded-full px-3 py-1 text-[12px] font-medium tabular-nums transition-colors ${
+              task.estimateMin === min ? "bg-ink text-white" : "bg-black/5 text-mute"
+            }`}
+          >
+            {min}
+          </motion.button>
+        ))}
+        <input
+          type="number"
+          min={1}
+          max={1440}
+          inputMode="numeric"
+          placeholder="分"
+          data-testid="estimate-input"
+          onBlur={(e) => {
+            const v = Number(e.currentTarget.value);
+            if (Number.isInteger(v) && v >= 1 && v <= 1440) update(task.id, { estimateMin: v });
+            e.currentTarget.value = "";
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) e.currentTarget.blur();
+          }}
+          className="w-16 rounded-full bg-black/5 px-3 py-1 text-[12px] tabular-nums outline-none placeholder:text-faint"
+        />
       </div>
 
       {/* steps */}

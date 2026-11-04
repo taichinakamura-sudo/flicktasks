@@ -6,6 +6,10 @@ type TaskRow = {
   status: Status;
   priority: Priority | null;
   steps: string;
+  estimate_min: number | null;
+  actual_ms: number;
+  doing_since: number | null;
+  completed_at: number | null;
   created_at: number;
   updated_at: number;
 };
@@ -26,6 +30,10 @@ export function rowToTask(r: TaskRow): Task {
     status: r.status,
     priority: r.priority,
     steps,
+    estimateMin: r.estimate_min,
+    actualMs: r.actual_ms,
+    doingSince: r.doing_since,
+    completedAt: r.completed_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -50,16 +58,34 @@ export async function getTask(db: D1Database, userId: string, id: string): Promi
 export function insertTaskStmt(db: D1Database, userId: string, t: Task) {
   return db
     .prepare(
-      "INSERT OR IGNORE INTO tasks (id, user_id, text, status, priority, steps, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT OR IGNORE INTO tasks (id, user_id, text, status, priority, steps, estimate_min, actual_ms, doing_since, completed_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
-    .bind(t.id, userId, t.text, t.status, t.priority, JSON.stringify(t.steps), t.createdAt, t.updatedAt);
+    .bind(
+      t.id,
+      userId,
+      t.text,
+      t.status,
+      t.priority,
+      JSON.stringify(t.steps),
+      t.estimateMin,
+      t.actualMs,
+      t.doingSince,
+      t.completedAt,
+      t.createdAt,
+      t.updatedAt,
+    );
 }
 
 export async function updateTask(
   db: D1Database,
   userId: string,
   id: string,
-  patch: Partial<Pick<Task, "text" | "status" | "priority" | "steps">>,
+  patch: Partial<
+    Pick<
+      Task,
+      "text" | "status" | "priority" | "steps" | "estimateMin" | "actualMs" | "doingSince" | "completedAt"
+    >
+  >,
 ): Promise<Task | null> {
   const sets: string[] = [];
   const values: unknown[] = [];
@@ -78,6 +104,22 @@ export async function updateTask(
   if (patch.steps !== undefined) {
     sets.push("steps = ?");
     values.push(JSON.stringify(patch.steps));
+  }
+  if (patch.estimateMin !== undefined) {
+    sets.push("estimate_min = ?");
+    values.push(patch.estimateMin);
+  }
+  if (patch.actualMs !== undefined) {
+    sets.push("actual_ms = ?");
+    values.push(patch.actualMs);
+  }
+  if (patch.doingSince !== undefined) {
+    sets.push("doing_since = ?");
+    values.push(patch.doingSince);
+  }
+  if (patch.completedAt !== undefined) {
+    sets.push("completed_at = ?");
+    values.push(patch.completedAt);
   }
   const now = Date.now();
   sets.push("updated_at = ?");

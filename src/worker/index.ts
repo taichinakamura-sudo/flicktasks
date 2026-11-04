@@ -14,6 +14,10 @@ const taskInput = z.object({
   status: z.enum(STATUSES).default("inbox"),
   priority: z.enum(PRIORITIES).nullable().default(null),
   steps: z.array(stepSchema).max(20).default([]),
+  estimateMin: z.number().int().min(1).max(1440).nullable().default(null),
+  actualMs: z.number().int().min(0).default(0),
+  doingSince: z.number().int().nullable().default(null),
+  completedAt: z.number().int().nullable().default(null),
   createdAt: z.number().int().optional(),
 });
 const taskPatch = z
@@ -22,6 +26,10 @@ const taskPatch = z
     status: z.enum(STATUSES),
     priority: z.enum(PRIORITIES).nullable(),
     steps: z.array(stepSchema).max(20),
+    estimateMin: z.number().int().min(1).max(1440).nullable(),
+    actualMs: z.number().int().min(0),
+    doingSince: z.number().int().nullable(),
+    completedAt: z.number().int().nullable(),
   })
   .partial()
   .refine((p) => Object.keys(p).length > 0, "empty patch");
@@ -55,6 +63,10 @@ function toTask(input: z.infer<typeof taskInput>): Task {
     status: input.status,
     priority: input.priority,
     steps: input.steps,
+    estimateMin: input.estimateMin,
+    actualMs: input.actualMs,
+    doingSince: input.doingSince,
+    completedAt: input.completedAt,
     createdAt: input.createdAt ?? now,
     updatedAt: now,
   };

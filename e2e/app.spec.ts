@@ -66,41 +66,260 @@ test("どこにもフォーカスがない状態でキーを打つとメモ欄�
   await expect(page.getByTestId("composer")).toHaveValue("abc");
 });
 
-test("フリックでステータスを進める / 戻す", async ({ page }) => {
+test("フリックでステータスを進める / 戻す(メモ⇄今日)", async ({ page }) => {
   await openApp(page);
   await addMemo(page, "フリックするタスク");
   const card = () => page.getByTestId("task-card").filter({ hasText: "フリックするタスク" });
 
-  // 右フリック: メモ → 進行中
+  // 右フリック: メモ → 今日
   await flick(card(), 1);
   await expect(page.getByTestId("count-inbox")).toHaveText("0");
-  await expect(page.getByTestId("count-doing")).toHaveText("1");
+  await expect(page.getByTestId("count-today")).toHaveText("1");
   await expect(card()).toHaveCount(0);
 
-  await page.getByTestId("tab-doing").click();
+  await page.getByTestId("tab-today").click();
   await expect(card()).toBeVisible();
-  await expect(card()).toHaveAttribute("data-status", "doing");
+  await expect(card()).toHaveAttribute("data-status", "today");
 
-  // 右フリック: 進行中 → 完了
-  await flick(card(), 1);
-  await expect(page.getByTestId("count-done")).toHaveText("1");
-  await page.getByTestId("tab-done").click();
-  await expect(card()).toHaveAttribute("data-status", "done");
-
-  // 完了でさらに右フリックしても何も起きない(跳ね返る)
-  await flick(card(), 1);
-  await expect(page.getByTestId("count-done")).toHaveText("1");
-  await expect(card()).toBeVisible();
-
-  // 左フリック: 完了 → 進行中
+  // 左フリック: 今日 → メモ
   await flick(card(), -1);
-  await expect(page.getByTestId("count-doing")).toHaveText("1");
-  await expect(page.getByTestId("count-done")).toHaveText("0");
+  await expect(page.getByTestId("count-inbox")).toHaveText("1");
+  await expect(page.getByTestId("count-today")).toHaveText("0");
+
+  // メモで左フリックしても何も起きない(跳ね返る)
+  await page.getByTestId("tab-inbox").click();
+  await flick(card(), -1);
+  await expect(page.getByTestId("count-inbox")).toHaveText("1");
+  await expect(card()).toBeVisible();
 
   // 短いドラッグはフリックとみなさない
-  await page.getByTestId("tab-doing").click();
   await flick(card(), 1, 30);
-  await expect(page.getByTestId("count-doing")).toHaveText("1");
+  await expect(page.getByTestId("count-inbox")).toHaveText("1");
+});
+
+test("シートで見積もりを設定・解除できる", async ({ page }) => {
+  await openApp(page);
+  await addMemo(page, "見積もりタスク");
+  const card = () => page.getByTestId("task-card").filter({ hasText: "見積もりタスク" });
+
+  await card().click();
+  await page.getByTestId("estimate-30").click();
+  await expect(page.getByTestId("estimate-30")).toHaveAttribute("aria-pressed", "true");
+  await page.getByTestId("sheet-close").click();
+  await expect(card()).toContainText("30分");
+
+  // 同じチップをもう一度押すと解除
+  await card().click();
+  await page.getByTestId("estimate-30").click();
+  await expect(page.getByTestId("estimate-30")).toHaveAttribute("aria-pressed", "false");
+  await page.getByTestId("sheet-close").click();
+  await expect(card()).not.toContainText("30分");
+
+  // 数値入力(1〜1440のみ受理)
+  await card().click();
+  await page.getByTestId("estimate-input").fill("45");
+  await page.getByTestId("estimate-input").press("Enter");
+  await page.getByTestId("sheet-close").click();
+  await expect(card()).toContainText("45分");
+
+  await card().click();
+  await page.getByTestId("estimate-input").fill("0");
+  await page.getByTestId("estimate-input").press("Enter");
+  await page.getByTestId("estimate-input").fill("2000");
+  await page.getByTestId("estimate-input").press("Enter");
+  await page.getByTestId("sheet-close").click();
+  await expect(card()).toContainText("45分");
+});
+
+test("今から: 固定カードが現れ自動計測が進み、常に1件に保たれる", async ({ page }) => {
+  await openApp(page);
+  await addMemo(page, "タスクA");
+  await addMemo(page, "タスクB");
+  const cardA = () => page.getByTestId("task-card").filter({ hasText: "タスクA" });
+  const cardB = () => page.getByTestId("task-card").filter({ hasText: "タスクB" });
+
+  // A: メモ→今日→今から
+  await flick(cardA(), 1);
+  await page.getByTestId("tab-today").click();
+  await flick(cardA(), 1);
+  const nowCard = page.getByTestId("now-card");
+  await expect(nowCard).toBeVisible();
+  await expect(nowCard).toContainText("タスクA");
+
+  // 経過時間が進む
+  const t1 = await page.getByTestId("now-elapsed").textContent();
+  await page.waitForTimeout(1600);
+  const t2 = await page.getByTestId("now-elapsed").textContent();
+  expect(t2).not.toBe(t1);
+
+  // Bを今日→今からへ: Aは今日に戻り、固定カードはBになる(常に1件)
+  await page.getByTestId("tab-inbox").click();
+  await flick(cardB(), 1);
+  await page.getByTestId("tab-today").click();
+  await flick(cardB(), 1);
+  await expect(nowCard).toContainText("タスクB");
+  await expect(cardA()).toBeVisible();
+  await expect(cardA()).toHaveAttribute("data-status", "today");
+
+  // 固定カードを右フリックで完了 → カードが消え、実績が残る
+  await flick(nowCard, 1);
+  await expect(nowCard).toBeHidden();
+  await page.getByTestId("tab-done").click();
+  await expect(cardB()).toHaveAttribute("data-status", "done");
+
+  // 完了カードで右フリックしても何も起きない(跳ね返る)
+  await flick(cardB(), 1);
+  await expect(cardB()).toBeVisible();
+  await expect(cardB()).toHaveAttribute("data-status", "done");
+
+  // リロードしても実績(actualMs)が残っている
+  await page.reload();
+  await expect(page.getByTestId("skeleton")).toBeHidden({ timeout: 10_000 });
+  const stored = await page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem("flicktasks:v1") ?? "{}") as {
+        tasks: { text: string; status: string; actualMs: number }[];
+      },
+  );
+  const b = stored.tasks.find((t) => t.text === "タスクB");
+  expect(b?.status).toBe("done");
+  expect(b?.actualMs ?? 0).toBeGreaterThan(0);
+});
+
+test("今からのままリロードしても計測が継続する", async ({ page }) => {
+  await openApp(page);
+  await addMemo(page, "継続タスク");
+  const card = () => page.getByTestId("task-card").filter({ hasText: "継続タスク" });
+  await flick(card(), 1);
+  await page.getByTestId("tab-today").click();
+  await flick(card(), 1);
+  await expect(page.getByTestId("now-card")).toBeVisible();
+
+  await page.waitForTimeout(1200);
+  await page.reload();
+  await expect(page.getByTestId("skeleton")).toBeHidden({ timeout: 10_000 });
+  await expect(page.getByTestId("now-card")).toBeVisible();
+  const stored = await page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem("flicktasks:v1") ?? "{}") as {
+        tasks: { text: string; doingSince: number | null }[];
+      },
+  );
+  expect(stored.tasks.find((t) => t.text === "継続タスク")?.doingSince).not.toBeNull();
+  // 計測が0からやり直しになっていない
+  await expect(page.getByTestId("now-elapsed")).not.toHaveText(/^0:00/);
+});
+
+test("日付をまたぐと予実サマリーが昨日の完了を引きずらない", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T23:57:00") });
+  await openApp(page);
+  await addMemo(page, "深夜タスク");
+  const card = () => page.getByTestId("task-card").filter({ hasText: "深夜タスク" });
+
+  await card().click();
+  await expect(page.getByTestId("sheet")).toBeVisible();
+  await page.getByTestId("estimate-30").click();
+  await expect(page.getByTestId("estimate-30")).toHaveAttribute("aria-pressed", "true");
+  await page.getByTestId("sheet-close").click();
+  await expect(page.getByTestId("sheet")).toBeHidden();
+
+  // 今日→今から→完了(completedAtは23:57頃)
+  await flick(card(), 1);
+  await page.getByTestId("tab-today").click();
+  await expect(page.getByTestId("plan-summary")).toContainText("計画 30分");
+  await flick(card(), 1);
+  await expect(page.getByTestId("now-card")).toBeVisible();
+  await flick(page.getByTestId("now-card"), 1);
+  await expect(page.getByTestId("now-card")).toBeHidden();
+  // 今日完了した分はサマリーに含まれ続ける
+  await expect(page.getByTestId("plan-summary")).toContainText("計画 30分");
+
+  // 日付をまたぐ → 昨日の完了は対象外になり、today/doingも無いのでサマリーごと消える
+  await page.clock.fastForward("05:00");
+  await expect(page.getByTestId("plan-summary")).toHaveCount(0);
+});
+
+test("今から中のタスクを削除→元に戻すと今からに復帰する", async ({ page }) => {
+  await openApp(page);
+  await addMemo(page, "削除テスト");
+  const card = () => page.getByTestId("task-card").filter({ hasText: "削除テスト" });
+  await flick(card(), 1);
+  await page.getByTestId("tab-today").click();
+  await flick(card(), 1);
+  const nowCard = page.getByTestId("now-card");
+  await expect(nowCard).toBeVisible();
+
+  await nowCard.click();
+  await expect(page.getByTestId("sheet")).toBeVisible();
+  await page.getByTestId("delete").click();
+  await expect(nowCard).toBeHidden();
+  await expect(page.getByTestId("toast")).toContainText("削除しました");
+  await page.getByRole("button", { name: "元に戻す" }).click();
+  await expect(nowCard).toBeVisible();
+  await expect(nowCard).toContainText("削除テスト");
+});
+
+test("ゲストの見積もり・実績がログイン取り込み後も保たれる", async ({ page }) => {
+  await openApp(page);
+  await addMemo(page, "同期タスク");
+  const card = () => page.getByTestId("task-card").filter({ hasText: "同期タスク" });
+
+  await card().click();
+  await expect(page.getByTestId("sheet")).toBeVisible();
+  await page.getByTestId("estimate-15").click();
+  await expect(page.getByTestId("estimate-15")).toHaveAttribute("aria-pressed", "true");
+  await page.getByTestId("sheet-close").click();
+  await expect(page.getByTestId("sheet")).toBeHidden();
+
+  // 今日→今からで1秒以上計測→今日へ戻して実績を確定
+  await flick(card(), 1);
+  await page.getByTestId("tab-today").click();
+  await flick(card(), 1);
+  await expect(page.getByTestId("now-card")).toBeVisible();
+  await page.waitForTimeout(1200);
+  await flick(page.getByTestId("now-card"), -1);
+  await expect(page.getByTestId("now-card")).toBeHidden();
+
+  await devLogin(page);
+  await page.reload();
+  await expect(page.getByTestId("skeleton")).toBeHidden({ timeout: 10_000 });
+
+  // ローカルを消してもサーバーから見積もり・実績つきで復元される
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await expect(page.getByTestId("skeleton")).toBeHidden({ timeout: 10_000 });
+  await page.getByTestId("tab-today").click();
+  await expect(card()).toContainText("15分");
+  const res = await page.request.get("/api/tasks");
+  const { tasks } = (await res.json()) as {
+    tasks: { text: string; estimateMin: number | null; actualMs: number }[];
+  };
+  const t = tasks.find((x) => x.text === "同期タスク");
+  expect(t?.estimateMin).toBe(15);
+  expect(t?.actualMs ?? 0).toBeGreaterThan(1000);
+});
+
+test("今日タブに予実サマリーが出る(計画と実績)", async ({ page }) => {
+  await openApp(page);
+  await addMemo(page, "見積もりあり");
+  await page.getByTestId("task-card").filter({ hasText: "見積もりあり" }).click();
+  await expect(page.getByTestId("sheet")).toBeVisible();
+  await page.getByTestId("estimate-30").click();
+  await expect(page.getByTestId("estimate-30")).toHaveAttribute("aria-pressed", "true");
+  await page.getByTestId("sheet-close").click();
+  await expect(page.getByTestId("sheet")).toBeHidden();
+  await flick(page.getByTestId("task-card").filter({ hasText: "見積もりあり" }), 1);
+
+  await addMemo(page, "見積もりなし");
+  await flick(page.getByTestId("task-card").filter({ hasText: "見積もりなし" }), 1);
+
+  // メモタブでは出ない
+  await expect(page.getByTestId("plan-summary")).toHaveCount(0);
+  await page.getByTestId("tab-today").click();
+  const summary = page.getByTestId("plan-summary");
+  await expect(summary).toBeVisible();
+  await expect(summary).toContainText("計画 30分");
+  await expect(summary).toContainText("実績 0分");
 });
 
 test("タップで詳細シート: 編集・優先度・削除と元に戻す", async ({ page }) => {
@@ -113,11 +332,11 @@ test("タップで詳細シート: 編集・優先度・削除と元に戻す", 
   await page.getByTestId("sheet-text").fill("編集済みタスク");
   await page.getByTestId("priority-high").click();
   await expect(page.getByTestId("priority-high")).toHaveAttribute("aria-pressed", "true");
-  await page.getByTestId("sheet-status-doing").click();
+  await page.getByTestId("sheet-status-today").click();
   await page.getByTestId("sheet-close").click();
   await expect(sheet).toBeHidden();
 
-  await page.getByTestId("tab-doing").click();
+  await page.getByTestId("tab-today").click();
   await expect(page.getByTestId("task-text").first()).toHaveText("編集済みタスク");
   await expect(page.getByRole("img", { name: "優先度 高" })).toBeVisible();
 

@@ -14,9 +14,20 @@ export async function addMemo(page: Page, text: string) {
 
 /** カードを水平方向にフリック(pointer events で motion の drag を駆動) */
 export async function flick(card: Locator, dir: 1 | -1, distance = 220) {
-  const box = await card.boundingBox();
-  if (!box) throw new Error("card not visible");
   const page = card.page();
+  await card.waitFor({ state: "visible" });
+  // タブ切替直後はlayoutスプリングでカードが動いている。位置が安定してから掴む
+  let box = await card.boundingBox();
+  for (let i = 0; i < 20; i++) {
+    await page.waitForTimeout(100);
+    const cur = await card.boundingBox();
+    if (box && cur && Math.abs(cur.x - box.x) < 1 && Math.abs(cur.y - box.y) < 1) {
+      box = cur;
+      break;
+    }
+    box = cur;
+  }
+  if (!box) throw new Error("card not visible");
   const x0 = box.x + box.width / 2;
   const y0 = box.y + box.height / 2;
   await page.mouse.move(x0, y0);

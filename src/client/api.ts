@@ -1,4 +1,4 @@
-import type { Refinement, Task, User } from "../shared/types";
+import type { Refinement, Task, TaskPatch, User } from "../shared/types";
 
 class ApiError extends Error {
   constructor(
@@ -41,7 +41,7 @@ export const api = {
     request<{ task: Task }>("/api/tasks", { method: "POST", body: JSON.stringify(task) }),
   importTasks: (tasks: Task[]) =>
     request<{ tasks: Task[] }>("/api/tasks/import", { method: "POST", body: JSON.stringify({ tasks }) }),
-  updateTask: (id: string, patch: Partial<Pick<Task, "text" | "status" | "priority" | "steps">>) =>
+  updateTask: (id: string, patch: TaskPatch) =>
     request<{ task: Task }>(`/api/tasks/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
   deleteTask: (id: string) => request<{ ok: true }>(`/api/tasks/${id}`, { method: "DELETE" }),
   refine: (text: string) =>
