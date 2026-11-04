@@ -47,8 +47,8 @@ export function DoneSummary() {
           </button>
         ))}
       </span>
-      <span className="min-w-0 flex-1 truncate text-right tabular-nums">
-        完了 {count}件 ・ 計画 {formatMin(planMin)} ・ 実績 {formatMin(Math.floor(actualMs / 60_000))}
+      <span className="min-w-0 flex-1 truncate text-right text-[11px] tabular-nums">
+        完了{count}件・計画{formatMin(planMin)}・実績{formatMin(Math.floor(actualMs / 60_000))}
       </span>
     </motion.div>
   );

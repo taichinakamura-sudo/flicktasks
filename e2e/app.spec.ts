@@ -193,15 +193,15 @@ test("完了タブで今日/今週/今月の振り返り集計が見える", asy
 
   await page.getByTestId("tab-done").click();
   const summary = page.getByTestId("done-summary");
-  await expect(summary).toContainText("完了 1件");
-  await expect(summary).toContainText("計画 30分");
-  await expect(summary).toContainText("実績 45分");
+  await expect(summary).toContainText("完了1件");
+  await expect(summary).toContainText("計画30分");
+  await expect(summary).toContainText("実績45分");
 
   // 期間を切り替えても今日の完了は含まれる
   await page.getByTestId("period-week").click();
-  await expect(summary).toContainText("完了 1件");
+  await expect(summary).toContainText("完了1件");
   await page.getByTestId("period-month").click();
-  await expect(summary).toContainText("完了 1件");
+  await expect(summary).toContainText("完了1件");
 });
 
 test("今から: 固定カードが現れ自動計測が進み、常に1件に保たれる", async ({ page }) => {
