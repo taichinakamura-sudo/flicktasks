@@ -2,6 +2,7 @@ import { MotionConfig } from "motion/react";
 import { useEffect } from "react";
 import { Background } from "./components/Background";
 import { Composer } from "./components/Composer";
+import { DoneSummary } from "./components/DoneSummary";
 import { Header } from "./components/Header";
 import { NowCard } from "./components/NowCard";
 import { PlanSummary } from "./components/PlanSummary";
@@ -38,6 +39,7 @@ export function App() {
         <StatusTabs />
         <NowCard />
         <PlanSummary />
+        <DoneSummary />
         <TaskList />
       </main>
       <TaskSheet />

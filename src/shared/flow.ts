@@ -74,6 +74,15 @@ export function hydrateTask(raw: unknown): Task | null {
   };
 }
 
+/** 実績の手入力修正。doing中は上書きした瞬間から再計測する(修正後に再び膨らまないように) */
+export function setActualMin(task: Task, min: number, now: number): Task {
+  return {
+    ...task,
+    actualMs: min * 60_000,
+    doingSince: task.status === "doing" ? now : task.doingSince,
+  };
+}
+
 /** 実測の現在値。doing中は経過を足す(時計ずれで負にはならない) */
 export function elapsedMs(task: Task, now: number): number {
   return task.actualMs + (task.doingSince !== null ? Math.max(0, now - task.doingSince) : 0);
@@ -103,6 +112,32 @@ export function planActual(
     planMin: target.reduce((sum, t) => sum + (t.estimateMin ?? 0), 0),
     actualMs: target.reduce((sum, t) => sum + elapsedMs(t, now), 0),
     empty: target.length === 0,
+  };
+}
+
+export type RetroPeriod = "today" | "week" | "month";
+
+/** 振り返り期間の開始時刻(端末ローカル)。週は月曜はじまり */
+export function periodStart(period: RetroPeriod, now: number): number {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  if (period === "week") d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  else if (period === "month") d.setDate(1);
+  return d.getTime();
+}
+
+/** 期間内に完了したタスクの件数と予実合計 */
+export function doneSummary(
+  tasks: Task[],
+  period: RetroPeriod,
+  now: number,
+): { count: number; planMin: number; actualMs: number } {
+  const start = periodStart(period, now);
+  const target = tasks.filter((t) => t.status === "done" && t.completedAt !== null && t.completedAt >= start);
+  return {
+    count: target.length,
+    planMin: target.reduce((sum, t) => sum + (t.estimateMin ?? 0), 0),
+    actualMs: target.reduce((sum, t) => sum + t.actualMs, 0),
   };
 }
 

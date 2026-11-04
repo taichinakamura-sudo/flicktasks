@@ -131,6 +131,79 @@ test("シートで見積もりを設定・解除できる", async ({ page }) => 
   await expect(card()).toContainText("45分");
 });
 
+test("シートで実績を手入力で修正できる(計測中は再計測)", async ({ page }) => {
+  await openApp(page);
+  await addMemo(page, "実績修正タスク");
+  const card = () => page.getByTestId("task-card").filter({ hasText: "実績修正タスク" });
+
+  // 今日へ移して実績を45分に修正 → 予実サマリーへ反映
+  await flick(card(), 1);
+  await page.getByTestId("tab-today").click();
+  await card().click();
+  await expect(page.getByTestId("sheet")).toBeVisible();
+  await page.getByTestId("actual-input").fill("45");
+  await page.getByTestId("actual-input").press("Enter");
+  await expect(page.getByTestId("actual-current")).toHaveText(/45分/);
+  await page.getByTestId("sheet-close").click();
+  // 閉じアニメーション中のオーバーレイがフリックを吸わないよう、消滅を待つ
+  await expect(page.getByTestId("sheet-backdrop")).toHaveCount(0);
+  await expect(page.getByTestId("plan-summary")).toContainText("実績 45分");
+
+  // 今からへ → 経過は45分から再開
+  await flick(card(), 1);
+  await expect(page.getByTestId("now-elapsed")).toHaveText(/^45:0/);
+
+  // 計測中に0へ修正 → その瞬間から再計測(0分台へ戻る)
+  await page.getByTestId("now-card").click();
+  await expect(page.getByTestId("sheet")).toBeVisible();
+  await page.getByTestId("actual-input").fill("0");
+  await page.getByTestId("actual-input").press("Enter");
+  await page.getByTestId("sheet-close").click();
+  await expect(page.getByTestId("now-elapsed")).toHaveText(/^0:0/);
+});
+
+test("実績チップでサッと設定・解除できる", async ({ page }) => {
+  await openApp(page);
+  await addMemo(page, "チップ実績タスク");
+  const card = () => page.getByTestId("task-card").filter({ hasText: "チップ実績タスク" });
+
+  await card().click();
+  await expect(page.getByTestId("sheet")).toBeVisible();
+  await page.getByTestId("actual-chip-30").click();
+  await expect(page.getByTestId("actual-current")).toHaveText(/30分/);
+  // 同じチップをもう一度押すと0に戻る
+  await page.getByTestId("actual-chip-30").click();
+  await expect(page.getByTestId("actual-current")).toHaveText(/0分/);
+});
+
+test("完了タブで今日/今週/今月の振り返り集計が見える", async ({ page }) => {
+  await openApp(page);
+  await addMemo(page, "振り返りタスク");
+  const card = () => page.getByTestId("task-card").filter({ hasText: "振り返りタスク" });
+
+  // シートから見積もり30分・実績45分を付けて完了にする
+  await card().click();
+  await expect(page.getByTestId("sheet")).toBeVisible();
+  await page.getByTestId("estimate-30").click();
+  await page.getByTestId("actual-input").fill("45");
+  await page.getByTestId("actual-input").press("Enter");
+  await page.getByTestId("sheet-status-done").click();
+  await page.getByTestId("sheet-close").click();
+  await expect(page.getByTestId("sheet-backdrop")).toHaveCount(0);
+
+  await page.getByTestId("tab-done").click();
+  const summary = page.getByTestId("done-summary");
+  await expect(summary).toContainText("完了1件");
+  await expect(summary).toContainText("計画30分");
+  await expect(summary).toContainText("実績45分");
+
+  // 期間を切り替えても今日の完了は含まれる
+  await page.getByTestId("period-week").click();
+  await expect(summary).toContainText("完了1件");
+  await page.getByTestId("period-month").click();
+  await expect(summary).toContainText("完了1件");
+});
+
 test("今から: 固定カードが現れ自動計測が進み、常に1件に保たれる", async ({ page }) => {
   await openApp(page);
   await addMemo(page, "タスクA");

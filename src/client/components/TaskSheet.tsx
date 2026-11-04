@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
+import { elapsedMs, formatMin, setActualMin } from "../../shared/flow";
 import {
   ESTIMATE_CHIPS,
   PRIORITIES,
@@ -10,6 +11,7 @@ import {
 } from "../../shared/types";
 import { api } from "../api";
 import { PRIORITY_LABEL, useStore } from "../store";
+import { useTick } from "../useTick";
 import { CheckIcon, CloseIcon, SparkIcon, TrashIcon } from "./Icons";
 
 export function TaskSheet() {
@@ -61,6 +63,10 @@ function SheetBody({ task }: { task: Task }) {
   const toggleStep = useStore((s) => s.toggleStep);
   const close = useStore((s) => s.openSheet);
   const showToast = useStore((s) => s.showToast);
+
+  // 計測中(今から)は実績表示を1秒ごとに更新する
+  const now = useTick(task.status === "doing");
+  const actMin = Math.floor(elapsedMs(task, now) / 60_000);
 
   const [text, setText] = useState(task.text);
   const [refining, setRefining] = useState(false);
@@ -184,6 +190,53 @@ function SheetBody({ task }: { task: Task }) {
           onBlur={(e) => {
             const v = Number(e.currentTarget.value);
             if (Number.isInteger(v) && v >= 1 && v <= 1440) update(task.id, { estimateMin: v });
+            e.currentTarget.value = "";
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) e.currentTarget.blur();
+          }}
+          className="w-16 rounded-full bg-black/5 px-3 py-1 text-[12px] tabular-nums outline-none placeholder:text-faint"
+        />
+      </div>
+
+      {/* actual (実績の手修正。計測の止め忘れで膨らんだ値を直す) */}
+      <div className="flex flex-wrap items-center gap-2 px-1">
+        <span className="text-[12px] text-mute">実績</span>
+        <span data-testid="actual-current" className="text-[13px] font-medium tabular-nums">
+          {formatMin(actMin)}
+        </span>
+        {ESTIMATE_CHIPS.map((min) => (
+          <motion.button
+            key={min}
+            type="button"
+            whileTap={{ scale: 0.92 }}
+            aria-pressed={actMin === min}
+            data-testid={`actual-chip-${min}`}
+            onClick={() => {
+              // 同じ値をもう一度押すと0クリア
+              const next = setActualMin(task, actMin === min ? 0 : min, Date.now());
+              update(task.id, { actualMs: next.actualMs, doingSince: next.doingSince });
+            }}
+            className={`rounded-full px-3 py-1 text-[12px] font-medium tabular-nums transition-colors ${
+              actMin === min ? "bg-ink text-white" : "bg-black/5 text-mute"
+            }`}
+          >
+            {min}
+          </motion.button>
+        ))}
+        <input
+          type="number"
+          min={0}
+          max={9999}
+          inputMode="numeric"
+          placeholder="分"
+          data-testid="actual-input"
+          onBlur={(e) => {
+            const v = Number(e.currentTarget.value);
+            if (e.currentTarget.value !== "" && Number.isInteger(v) && v >= 0 && v <= 9999) {
+              const next = setActualMin(task, v, Date.now());
+              update(task.id, { actualMs: next.actualMs, doingSince: next.doingSince });
+            }
             e.currentTarget.value = "";
           }}
           onKeyDown={(e) => {
