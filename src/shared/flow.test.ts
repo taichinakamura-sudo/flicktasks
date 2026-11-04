@@ -8,6 +8,7 @@ import {
   normalizeDoing,
   planActual,
   sameLocalDay,
+  setActualMin,
 } from "./flow";
 import type { Task } from "./types";
 
@@ -133,6 +134,26 @@ describe("hydrateTask", () => {
     expect(hydrateTask(null)).toBeNull();
     expect(hydrateTask({})).toBeNull();
     expect(hydrateTask({ id: "x", text: "y", status: "bogus" })).toBeNull();
+  });
+});
+
+describe("setActualMin", () => {
+  it("doing以外は実績だけ上書きし、計測状態は変えない", () => {
+    const t = setActualMin(base({ status: "today", actualMs: 5_400_000 }), 45, 99_000);
+    expect(t.actualMs).toBe(45 * 60_000);
+    expect(t.doingSince).toBeNull();
+  });
+
+  it("doing中は実績を上書きし、その瞬間から再計測する", () => {
+    const t = setActualMin(base({ status: "doing", doingSince: 1000, actualMs: 7_200_000 }), 30, 50_000);
+    expect(t.actualMs).toBe(30 * 60_000);
+    expect(t.doingSince).toBe(50_000);
+  });
+
+  it("0でクリアできる", () => {
+    const t = setActualMin(base({ status: "done", actualMs: 999_999, completedAt: 9000 }), 0, 50_000);
+    expect(t.actualMs).toBe(0);
+    expect(t.completedAt).toBe(9000);
   });
 });
 

@@ -74,6 +74,15 @@ export function hydrateTask(raw: unknown): Task | null {
   };
 }
 
+/** 実績の手入力修正。doing中は上書きした瞬間から再計測する(修正後に再び膨らまないように) */
+export function setActualMin(task: Task, min: number, now: number): Task {
+  return {
+    ...task,
+    actualMs: min * 60_000,
+    doingSince: task.status === "doing" ? now : task.doingSince,
+  };
+}
+
 /** 実測の現在値。doing中は経過を足す(時計ずれで負にはならない) */
 export function elapsedMs(task: Task, now: number): number {
   return task.actualMs + (task.doingSince !== null ? Math.max(0, now - task.doingSince) : 0);
